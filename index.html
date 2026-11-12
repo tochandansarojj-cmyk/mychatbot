@@ -1,0 +1,421 @@
+
+# ============================================================
+# IRIS FLOWER CLASSIFICATION - MACHINE LEARNING + GRADIO UI
+# Google Colab - Complete Project in One Cell
+# Dataset: Scikit-learn built-in Iris dataset
+# Model: Random Forest Classifier
+# UI: Gradio
+# ============================================================
+
+# 1. INSTALL REQUIRED LIBRARIES
+!pip install -q --upgrade gradio scikit-learn pandas matplotlib seaborn
+
+# 2. IMPORT LIBRARIES
+import gradio as gr
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+from sklearn.datasets import load_iris
+from sklearn.model_selection import train_test_split
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import (
+    accuracy_score,
+    classification_report,
+    confusion_matrix
+)
+
+# 3. LOAD DATASET FROM SCIKIT-LEARN LIBRARY
+iris = load_iris(as_frame=True)
+
+X = iris.data
+y = iris.target
+
+feature_names = list(X.columns)
+target_names = list(iris.target_names)
+
+# Dataset preview
+df = X.copy()
+df["Species"] = [target_names[i] for i in y]
+
+# 4. SPLIT DATASET
+X_train, X_test, y_train, y_test = train_test_split(
+    X, y,
+    test_size=0.20,
+    random_state=42,
+    stratify=y
+)
+
+# 5. TRAIN MACHINE LEARNING MODEL
+model = RandomForestClassifier(
+    n_estimators=150,
+    max_depth=5,
+    random_state=42
+)
+
+model.fit(X_train, y_train)
+
+# 6. MODEL EVALUATION
+y_pred = model.predict(X_test)
+
+accuracy = accuracy_score(y_test, y_pred)
+
+report = classification_report(
+    y_test,
+    y_pred,
+    target_names=target_names,
+    output_dict=True
+)
+
+report_df = pd.DataFrame(report).transpose().round(3)
+
+cm = confusion_matrix(y_test, y_pred)
+
+# 7. PREDICTION FUNCTION
+def predict_flower(
+    sepal_length,
+    sepal_width,
+    petal_length,
+    petal_width
+):
+    input_data = pd.DataFrame(
+        [[
+            sepal_length,
+            sepal_width,
+            petal_length,
+            petal_width
+        ]],
+        columns=feature_names
+    )
+
+    prediction = model.predict(input_data)[0]
+    probabilities = model.predict_proba(input_data)[0]
+
+    predicted_species = target_names[prediction]
+
+    confidence = float(max(probabilities)) * 100
+
+    probability_dict = {
+        target_names[i]: float(probabilities[i])
+        for i in range(len(target_names))
+    }
+
+    result = f"""
+### Prediction Result
+
+**Predicted Flower:** {predicted_species.title()}
+
+**Prediction Confidence:** {confidence:.2f}%
+
+**Input Measurements:**
+- Sepal Length: {sepal_length} cm
+- Sepal Width: {sepal_width} cm
+- Petal Length: {petal_length} cm
+- Petal Width: {petal_width} cm
+
+The prediction was generated using a trained Random Forest
+machine learning classifier.
+"""
+
+    return predicted_species.title(), probability_dict, result
+
+
+# 8. CONFUSION MATRIX PLOT
+def create_confusion_matrix():
+    fig, ax = plt.subplots(figsize=(7, 5))
+
+    sns.heatmap(
+        cm,
+        annot=True,
+        fmt="d",
+        cmap="Blues",
+        xticklabels=target_names,
+        yticklabels=target_names,
+        ax=ax
+    )
+
+    ax.set_title("Model Confusion Matrix")
+    ax.set_xlabel("Predicted Species")
+    ax.set_ylabel("Actual Species")
+
+    plt.tight_layout()
+    return fig
+
+
+# 9. CUSTOM CSS
+custom_css = """
+.gradio-container {
+    font-family: Arial, sans-serif;
+}
+#main-title {
+    text-align: center;
+}
+"""
+
+# 10. BUILD GRADIO USER INTERFACE
+with gr.Blocks(
+    theme=gr.themes.Soft(),
+    css=custom_css,
+    title="Iris Flower Classification"
+) as demo:
+
+    gr.Markdown(
+        """
+        # 🌸 Iris Flower Classification
+        ### Machine Learning Prediction System
+
+        Enter the flower measurements below and let the
+        Random Forest model predict its species.
+
+        **Technology:** Python | Scikit-learn | Pandas | Gradio
+        """,
+        elem_id="main-title"
+    )
+
+    with gr.Tab("🌺 Make Prediction"):
+
+        gr.Markdown(
+            "### Enter Flower Measurements"
+        )
+
+        with gr.Row():
+
+            with gr.Column():
+
+                sepal_length = gr.Slider(
+                    minimum=4.0,
+                    maximum=8.0,
+                    value=5.1,
+                    step=0.1,
+                    label="Sepal Length (cm)"
+                )
+
+                sepal_width = gr.Slider(
+                    minimum=2.0,
+                    maximum=4.5,
+                    value=3.5,
+                    step=0.1,
+                    label="Sepal Width (cm)"
+                )
+
+                petal_length = gr.Slider(
+                    minimum=1.0,
+                    maximum=7.0,
+                    value=1.4,
+                    step=0.1,
+                    label="Petal Length (cm)"
+                )
+
+                petal_width = gr.Slider(
+                    minimum=0.1,
+                    maximum=2.5,
+                    value=0.2,
+                    step=0.1,
+                    label="Petal Width (cm)"
+                )
+
+                predict_button = gr.Button(
+                    "🔍 Predict Flower Species",
+                    variant="primary",
+                    size="lg"
+                )
+
+                clear_button = gr.Button(
+                    "Reset Measurements"
+                )
+
+            with gr.Column():
+
+                prediction_output = gr.Label(
+                    label="Predicted Flower",
+                    num_top_classes=3
+                )
+
+                probability_output = gr.Label(
+                    label="Prediction Probabilities",
+                    num_top_classes=3
+                )
+
+                result_output = gr.Markdown()
+
+        predict_button.click(
+            fn=predict_flower,
+            inputs=[
+                sepal_length,
+                sepal_width,
+                petal_length,
+                petal_width
+            ],
+            outputs=[
+                prediction_output,
+                probability_output,
+                result_output
+            ]
+        )
+
+        clear_button.click(
+            fn=lambda: (
+                5.1, 3.5, 1.4, 0.2,
+                None, None, ""
+            ),
+            inputs=[],
+            outputs=[
+                sepal_length,
+                sepal_width,
+                petal_length,
+                petal_width,
+                prediction_output,
+                probability_output,
+                result_output
+            ]
+        )
+
+        gr.Markdown("### Try Sample Measurements")
+
+        gr.Examples(
+            examples=[
+                [5.1, 3.5, 1.4, 0.2],
+                [6.0, 2.9, 4.5, 1.5],
+                [6.5, 3.0, 5.8, 2.2]
+            ],
+            inputs=[
+                sepal_length,
+                sepal_width,
+                petal_length,
+                petal_width
+            ],
+            label="Click an example to load measurements"
+        )
+
+    with gr.Tab("📊 Model Performance"):
+
+        gr.Markdown("## Model Evaluation")
+
+        gr.Markdown(
+            f"""
+            ### Model Information
+
+            - Algorithm: Random Forest Classifier
+            - Number of Trees: 150
+            - Training Samples: {len(X_train)}
+            - Testing Samples: {len(X_test)}
+            - Total Dataset Samples: {len(df)}
+            - Number of Classes: 3
+
+            ### Model Accuracy
+
+            # {accuracy * 100:.2f}%
+            """
+        )
+
+        gr.Markdown("### Classification Report")
+
+        gr.Dataframe(
+            value=report_df,
+            label="Precision, Recall and F1 Score",
+            interactive=False
+        )
+
+        gr.Markdown("### Confusion Matrix")
+
+        gr.Plot(
+            value=create_confusion_matrix()
+        )
+
+    with gr.Tab("📁 Dataset Information"):
+
+        gr.Markdown(
+            """
+            ## Iris Dataset
+
+            This project uses the built-in Iris dataset
+            from the Scikit-learn library.
+
+            **Dataset Source:**
+            https://scikit-learn.org/stable/modules/generated/sklearn.datasets.load_iris.html
+
+            **Features:**
+            1. Sepal Length
+            2. Sepal Width
+            3. Petal Length
+            4. Petal Width
+
+            **Target Classes:**
+            - Setosa
+            - Versicolor
+            - Virginica
+            """
+        )
+
+        gr.Markdown("### Dataset Preview")
+
+        gr.Dataframe(
+            value=df.head(20),
+            label="First 20 Dataset Records",
+            interactive=False
+        )
+
+        gr.Markdown("### Dataset Statistics")
+
+        gr.Dataframe(
+            value=df.describe().round(2),
+            interactive=False
+        )
+
+    with gr.Tab("ℹ️ About Project"):
+
+        gr.Markdown(
+            """
+            ## About This Project
+
+            This is an interactive machine learning application
+            developed using Python.
+
+            ### Machine Learning Workflow
+
+            1. Load the Iris dataset.
+            2. Explore and prepare the data.
+            3. Split data into training and testing sets.
+            4. Train a Random Forest classifier.
+            5. Evaluate model performance.
+            6. Predict flower species from user inputs.
+            7. Present predictions using a Gradio web interface.
+
+            ### Technologies Used
+
+            - Python
+            - Google Colab
+            - Scikit-learn
+            - Pandas
+            - NumPy
+            - Matplotlib
+            - Seaborn
+            - Gradio
+
+            **Project Type:** Supervised Machine Learning
+            **Problem Type:** Multi-class Classification
+
+            Developed as an educational machine learning project.
+            """
+        )
+
+    gr.Markdown(
+        """
+        ---
+        ### 🌸 Iris Flower Classification Project
+        Built with Python, Machine Learning and Gradio.
+        """
+    )
+
+# 11. LAUNCH WEB APPLICATION
+print("Model Training Completed!")
+print(f"Model Accuracy: {accuracy * 100:.2f}%")
+print("Launching Gradio Web Application...")
+print("Wait for your public Gradio URL below.")
+
+demo.launch(
+    share=True,
+    debug=True,
+    show_error=True
+)
